@@ -1,0 +1,4 @@
+www/config.json
+.logs/
+.sessions/
+tmp/
