@@ -126,8 +126,10 @@ STATIC PROCEDURE TLine( cKind, cText )
 
 RETURN
 
-// Comprobacion: suma pass/fail y deja linea verde o roja
-STATIC PROCEDURE TCheck( lCond, cLabel )
+// Comprobacion: suma pass/fail y deja linea verde o roja.
+// cWhy (opcional) deja debajo una explicacion didactica:
+// que se hizo, que se testeo y con que parametros.
+STATIC PROCEDURE TCheck( lCond, cLabel, cWhy )
 
    IF lCond
 
@@ -138,6 +140,12 @@ STATIC PROCEDURE TCheck( lCond, cLabel )
 
       s_nFail++
       TLine( 'err', 'FAIL ' + cLabel )
+
+   ENDIF
+
+   IF cWhy != NIL
+
+      TLine( 'how', cWhy )
 
    ENDIF
 
@@ -181,12 +189,16 @@ STATIC FUNCTION TestBpm_InvoiceSimple()
       TLine( 'sys', 'rombo complete -> yes, rombo check_amount -> yes' )
       TLine( 'sys', 'accion auto_approve -> estado ' + hRes[ 'state' ] )
 
-      TCheck( hRes[ 'ok' ] .AND. hRes[ 'state' ] == 'approved', 'A: auto-approved' )
-      TCheck( oEng:Get( oProc, 'FAC-A' )[ 'data' ][ 'approved_by' ] == 'system', 'A: approved by system' )
+      TCheck( hRes[ 'ok' ] .AND. hRes[ 'state' ] == 'approved', 'A: auto-approved', ;
+         "recibimos FAC-A (Papelera Sur, amount=320): completa y < 1000, la accion auto_approve la deja en 'approved' ella sola" )
+      TCheck( oEng:Get( oProc, 'FAC-A' )[ 'data' ][ 'approved_by' ] == 'system', 'A: approved by system', ;
+         "el handler de auto_approve grabo approved_by='system' en los datos de FAC-A" )
 
       aHist := oEng:History( oProc, 'FAC-A' )
-      TCheck( aHist[ 1 ][ 'action' ] == 'receive' .AND. aHist[ 1 ][ 'user' ] == 'recepcion', 'A: receive logged with user' )
-      TCheck( aHist[ 2 ][ 'action' ] == 'auto_approve' .AND. aHist[ 2 ][ 'to' ] == 'approved', 'A: auto_approve logged to approved' )
+      TCheck( aHist[ 1 ][ 'action' ] == 'receive' .AND. aHist[ 1 ][ 'user' ] == 'recepcion', 'A: receive logged with user', ;
+         "el historial de FAC-A guarda como 1er paso la accion 'receive' ejecutada por el usuario 'recepcion'" )
+      TCheck( aHist[ 2 ][ 'action' ] == 'auto_approve' .AND. aHist[ 2 ][ 'to' ] == 'approved', 'A: auto_approve logged to approved', ;
+         "2o paso del historial de FAC-A: accion 'auto_approve' con destino 'approved'" )
 
       // CAMINO B: completa y >= 1000 -> espera firma humana
 
@@ -198,8 +210,10 @@ STATIC FUNCTION TestBpm_InvoiceSimple()
       TLine( 'sys', 'rombo complete -> yes, rombo check_amount -> no' )
       TLine( 'sys', 'accion manual_approve es manual: el motor espera (pending)' )
 
-      TCheck( hRes[ 'ok' ] .AND. hRes[ 'state' ] == 'received', 'B: waits in received' )
-      TCheck( hRes[ 'pending' ] == 'manual_approve', 'B: manual approval pending' )
+      TCheck( hRes[ 'ok' ] .AND. hRes[ 'state' ] == 'received', 'B: waits in received', ;
+         "FAC-B (amount=2400 >= 1000): el rombo check_amount dice 'no' y la instancia espera firma en 'received'" )
+      TCheck( hRes[ 'pending' ] == 'manual_approve', 'B: manual approval pending', ;
+         "el motor devuelve pending='manual_approve': esa accion es manual y no se ejecuta sola" )
 
       TLine( 'user', "> Run manual_approve FAC-B (supervisora)" )
 
@@ -207,8 +221,10 @@ STATIC FUNCTION TestBpm_InvoiceSimple()
 
       TLine( 'sys', 'accion manual_approve -> estado ' + hRes[ 'state' ] )
 
-      TCheck( hRes[ 'ok' ] .AND. hRes[ 'state' ] == 'approved', 'B: approved by human' )
-      TCheck( oEng:Get( oProc, 'FAC-B' )[ 'data' ][ 'approved_by' ] == 'supervisora', 'B: approver recorded' )
+      TCheck( hRes[ 'ok' ] .AND. hRes[ 'state' ] == 'approved', 'B: approved by human', ;
+         "la usuaria 'supervisora' ejecuta manual_approve sobre FAC-B y la instancia pasa a 'approved'" )
+      TCheck( oEng:Get( oProc, 'FAC-B' )[ 'data' ][ 'approved_by' ] == 'supervisora', 'B: approver recorded', ;
+         "el handler de manual_approve grabo approved_by='supervisora', quien firmo" )
 
       // CAMINO C: incompleta -> notifica y se devuelve
       // (sin la regla fields para poder llegar al rombo con datos incompletos)
@@ -222,11 +238,14 @@ STATIC FUNCTION TestBpm_InvoiceSimple()
 
       TLine( 'sys', 'rombo complete -> no, accion notify_supplier -> estado ' + hRes[ 'state' ] )
 
-      TCheck( hRes[ 'ok' ] .AND. hRes[ 'state' ] == 'returned', 'C: incomplete returned' )
-      TCheck( oEng:Get( oProc, 'FAC-C' )[ 'data' ][ 'notified' ], 'C: supplier notified' )
+      TCheck( hRes[ 'ok' ] .AND. hRes[ 'state' ] == 'returned', 'C: incomplete returned', ;
+         "FAC-C llega sin supplier: el rombo complete dice 'no' y notify_supplier la manda a 'returned'" )
+      TCheck( oEng:Get( oProc, 'FAC-C' )[ 'data' ][ 'notified' ], 'C: supplier notified', ;
+         'el handler de notify_supplier marco notified=.T. en los datos de FAC-C' )
 
       aHist := oEng:History( oProc, 'FAC-C' )
-      TCheck( aHist[ 2 ][ 'action' ] == 'notify_supplier' .AND. aHist[ 2 ][ 'to' ] == 'returned', 'C: notify logged to returned' )
+      TCheck( aHist[ 2 ][ 'action' ] == 'notify_supplier' .AND. aHist[ 2 ][ 'to' ] == 'returned', 'C: notify logged to returned', ;
+         "2o paso del historial de FAC-C: accion 'notify_supplier' con destino 'returned'" )
 
       // El borde: 1000 exactos ya NO es < 1000, va a manual
 
@@ -237,13 +256,15 @@ STATIC FUNCTION TestBpm_InvoiceSimple()
 
       TLine( 'sys', 'rombo check_amount con 1000 -> no (manual)' )
 
-      TCheck( hRes[ 'pending' ] == 'manual_approve', 'edge: 1000 goes to manual' )
+      TCheck( hRes[ 'pending' ] == 'manual_approve', 'edge: 1000 goes to manual', ;
+         'FAC-D con amount=1000 exactos: la condicion es amount < 1000, asi que 1000 va a aprobacion manual' )
 
       // Las instancias conviven sin mezclarse
 
       TCheck( oEng:Get( oProc, 'FAC-A' )[ 'state' ] == 'approved' .AND. ;
               oEng:Get( oProc, 'FAC-B' )[ 'state' ] == 'approved' .AND. ;
-              oEng:Get( oProc, 'FAC-C' )[ 'state' ] == 'returned', 'instances isolated' )
+              oEng:Get( oProc, 'FAC-C' )[ 'state' ] == 'returned', 'instances isolated', ;
+         'las instancias conviven en el mismo proceso sin mezclarse: FAC-A approved, FAC-B approved, FAC-C returned' )
 
    CATCH oErr
 
@@ -277,84 +298,108 @@ STATIC FUNCTION TestBpm_Engine()
 
       hRes := oEng:Run( oProc, uAna, 'receive', { 'id' => 'F-1', 'supplier' => 'ACME', 'amount' => 500 } )
 
-      TCheck( hRes[ 'ok' ], 'receive ok' )
-      TCheck( hRes[ 'state' ] == 'approved', 'auto path reaches approved' )
-      TCheck( Empty( hRes[ 'pending' ] ), 'auto path has nothing pending' )
-      TCheck( Len( hRes[ 'executed' ] ) == 1 .AND. hRes[ 'executed' ][ 1 ] == 'auto_approve', 'auto_approve executed by cascade' )
-      TCheck( oEng:Get( oProc, 'F-1' )[ 'data' ][ 'approved_by' ] == 'system', 'auto handler ran' )
-      TCheck( Len( oEng:History( oProc, 'F-1' ) ) == 2, 'history: receive + auto_approve' )
+      TCheck( hRes[ 'ok' ], 'receive ok', ;
+         "Run('receive', {id='F-1', supplier='ACME', amount=500}) aceptado por el motor" )
+      TCheck( hRes[ 'state' ] == 'approved', 'auto path reaches approved', ;
+         "amount=500 < 1000: la cascada automatica llega sola hasta el estado 'approved'" )
+      TCheck( Empty( hRes[ 'pending' ] ), 'auto path has nothing pending', ;
+         'tras la cascada no queda ninguna accion manual pendiente en F-1' )
+      TCheck( Len( hRes[ 'executed' ] ) == 1 .AND. hRes[ 'executed' ][ 1 ] == 'auto_approve', 'auto_approve executed by cascade', ;
+         "en 'executed' solo aparece 'auto_approve': la unica accion automatica del camino de F-1" )
+      TCheck( oEng:Get( oProc, 'F-1' )[ 'data' ][ 'approved_by' ] == 'system', 'auto handler ran', ;
+         "el handler de auto_approve corrio en la cascada y grabo approved_by='system' en F-1" )
+      TCheck( Len( oEng:History( oProc, 'F-1' ) ) == 2, 'history: receive + auto_approve', ;
+         'el historial de F-1 tiene exactamente 2 pasos: receive y auto_approve' )
 
       TLine( 'user', "> Run receive F-2 (1500) -> espera manual" )
 
       hRes := oEng:Run( oProc, uAna, 'receive', { 'id' => 'F-2', 'supplier' => 'ACME', 'amount' => 1500 } )
 
-      TCheck( hRes[ 'state' ] == 'received', 'manual path waits in received' )
-      TCheck( hRes[ 'pending' ] == 'manual_approve', 'manual_approve pending' )
+      TCheck( hRes[ 'state' ] == 'received', 'manual path waits in received', ;
+         "F-2 (amount=1500 >= 1000) no puede auto-aprobarse: espera en 'received'" )
+      TCheck( hRes[ 'pending' ] == 'manual_approve', 'manual_approve pending', ;
+         "el motor devuelve pending='manual_approve': falta la firma humana en F-2" )
 
       TLine( 'user', "> Run manual_approve F-2 SIN rol -> rechazo" )
 
       hRes := oEng:Run( oProc, uAna, 'manual_approve', { 'id' => 'F-2' } )
 
       TLine( 'sys', 'motor responde: ' + hRes[ 'error' ] )
-      TCheck( ! hRes[ 'ok' ] .AND. 'role not allowed' $ hRes[ 'error' ], 'manual approve refused without role' )
+      TCheck( ! hRes[ 'ok' ] .AND. 'role not allowed' $ hRes[ 'error' ], 'manual approve refused without role', ;
+         "ana tiene rol 'clerk' y la regla roles de manual_approve exige 'approver': el motor responde role not allowed" )
 
       TLine( 'user', "> Run manual_approve F-2 con rol approver" )
 
       hRes := oEng:Run( oProc, uBoss, 'manual_approve', { 'id' => 'F-2' } )
 
-      TCheck( hRes[ 'ok' ] .AND. hRes[ 'state' ] == 'approved', 'manual approve with role' )
-      TCheck( oEng:Get( oProc, 'F-2' )[ 'data' ][ 'approved_by' ] == 'boss', 'manual handler ran with user' )
-      TCheck( Empty( hRes[ 'pending' ] ), 'pending cleared after manual approve' )
+      TCheck( hRes[ 'ok' ] .AND. hRes[ 'state' ] == 'approved', 'manual approve with role', ;
+         "boss si tiene rol 'approver': manual_approve se ejecuta y F-2 pasa a 'approved'" )
+      TCheck( oEng:Get( oProc, 'F-2' )[ 'data' ][ 'approved_by' ] == 'boss', 'manual handler ran with user', ;
+         "el handler grabo approved_by='boss', el usuario que firmo F-2" )
+      TCheck( Empty( hRes[ 'pending' ] ), 'pending cleared after manual approve', ;
+         'tras la firma de boss ya no queda nada pendiente en F-2' )
 
       TLine( 'user', "> repetir manual_approve F-2 -> error claro" )
 
       hRes := oEng:Run( oProc, uBoss, 'manual_approve', { 'id' => 'F-2' } )
 
       TLine( 'sys', 'motor responde: ' + hRes[ 'error' ] )
-      TCheck( ! hRes[ 'ok' ] .AND. 'not pending' $ hRes[ 'error' ], 'repeated manual approve is a clear no-op error' )
+      TCheck( ! hRes[ 'ok' ] .AND. 'not pending' $ hRes[ 'error' ], 'repeated manual approve is a clear no-op error', ;
+         'repetir manual_approve sobre F-2 (ya aprobada) devuelve el error claro not pending' )
 
       TLine( 'user', "> receive sin campos obligatorios -> regla fields" )
 
       hRes := oEng:Run( oProc, uAna, 'receive', { 'id' => 'F-3', 'supplier' => '', 'amount' => 0 } )
 
       TLine( 'sys', 'motor responde: ' + hRes[ 'error' ] )
-      TCheck( ! hRes[ 'ok' ] .AND. 'missing field' $ hRes[ 'error' ], 'receive without fields refused by rule' )
+      TCheck( ! hRes[ 'ok' ] .AND. 'missing field' $ hRes[ 'error' ], 'receive without fields refused by rule', ;
+         "receive con supplier='' y amount=0: la regla fields exige esos campos y responde missing field" )
 
       TLine( 'user', "> otra instancia y camino 'no' del rombo (definicion sin regla fields)" )
 
       oBad := SimpleInvoiceProcess()
       hRes := oEng:Run( oBad, uAna, 'receive', { 'id' => 'F-4', 'supplier' => 'ACME', 'amount' => 10 } )
-      TCheck( hRes[ 'ok' ], 'second instance independent' )
+      TCheck( hRes[ 'ok' ], 'second instance independent', ;
+         'otra copia del mismo proceso acepta F-4 (amount=10) sin interferir con la primera' )
 
       hb_HDel( oBad:hRules, 'receive' )
       hRes := oEng:Run( oBad, uAna, 'receive', { 'id' => 'F-5', 'supplier' => '', 'amount' => 100 } )
-      TCheck( hRes[ 'ok' ] .AND. hRes[ 'state' ] == 'returned', 'incomplete invoice returned' )
-      TCheck( oEng:Get( oBad, 'F-5' )[ 'data' ][ 'notified' ], 'supplier notified by handler' )
+      TCheck( hRes[ 'ok' ] .AND. hRes[ 'state' ] == 'returned', 'incomplete invoice returned', ;
+         "F-5 sin supplier (quitamos la regla fields a proposito) llega al rombo complete -> 'no' -> 'returned'" )
+      TCheck( oEng:Get( oBad, 'F-5' )[ 'data' ][ 'notified' ], 'supplier notified by handler', ;
+         'el handler de notify_supplier marco notified=.T. en F-5' )
 
       TLine( 'user', "> errores de uso: sin id, duplicado, accion desconocida" )
 
       hRes := oEng:Run( oProc, uAna, 'receive', { 'supplier' => 'ACME', 'amount' => 1 } )
-      TCheck( ! hRes[ 'ok' ] .AND. "'id'" $ hRes[ 'error' ], 'missing id refused' )
+      TCheck( ! hRes[ 'ok' ] .AND. "'id'" $ hRes[ 'error' ], 'missing id refused', ;
+         "Run sin el campo 'id': el motor lo exige y su error nombra 'id'" )
 
       hRes := oEng:Run( oProc, uAna, 'receive', { 'id' => 'F-1', 'supplier' => 'ACME', 'amount' => 1 } )
-      TCheck( ! hRes[ 'ok' ] .AND. 'already exists' $ hRes[ 'error' ], 'duplicate instance refused' )
+      TCheck( ! hRes[ 'ok' ] .AND. 'already exists' $ hRes[ 'error' ], 'duplicate instance refused', ;
+         "repetir id='F-1' responde already exists: los ids son unicos por proceso" )
 
       hRes := oEng:Run( oProc, uAna, 'fly', { 'id' => 'F-9' } )
-      TCheck( ! hRes[ 'ok' ] .AND. 'unknown action' $ hRes[ 'error' ], 'unknown action refused' )
+      TCheck( ! hRes[ 'ok' ] .AND. 'unknown action' $ hRes[ 'error' ], 'unknown action refused', ;
+         "la accion 'fly' no existe en el proceso: el motor responde unknown action" )
 
       hRes := oEng:Run( oProc, uBoss, 'manual_approve', { 'id' => 'F-9' } )
-      TCheck( ! hRes[ 'ok' ] .AND. 'unknown instance' $ hRes[ 'error' ], 'unknown instance refused' )
+      TCheck( ! hRes[ 'ok' ] .AND. 'unknown instance' $ hRes[ 'error' ], 'unknown instance refused', ;
+         "manual_approve sobre id='F-9', que no existe: el motor responde unknown instance" )
 
       hRes := oEng:Run( oProc, 'not a user', 'receive', { 'id' => 'F-9' } )
-      TCheck( ! hRes[ 'ok' ] .AND. 'cName' $ hRes[ 'error' ], 'bad user refused' )
+      TCheck( ! hRes[ 'ok' ] .AND. 'cName' $ hRes[ 'error' ], 'bad user refused', ;
+         "pasamos el texto 'not a user' en lugar de un objeto usuario: el motor pide un objeto con cName" )
 
       hRes := oEng:Run( 'not a process', uAna, 'receive', { 'id' => 'F-9' } )
-      TCheck( ! hRes[ 'ok' ] .AND. 'ProcessDefinition' $ hRes[ 'error' ], 'bad process refused' )
+      TCheck( ! hRes[ 'ok' ] .AND. 'ProcessDefinition' $ hRes[ 'error' ], 'bad process refused', ;
+         "pasamos el texto 'not a process' en lugar de un ProcessDefinition: el motor lo rechaza nombrandolo" )
 
       oBad := ProcessDefinition():New( 'inv' )
       oBad:AddTransition( 'go', 'nowhere' )
       hRes := oEng:Run( oBad, uAna, 'go', { 'id' => 'X' } )
-      TCheck( ! hRes[ 'ok' ] .AND. 'invalid process definition' $ hRes[ 'error' ], 'invalid definition refused' )
+      TCheck( ! hRes[ 'ok' ] .AND. 'invalid process definition' $ hRes[ 'error' ], 'invalid definition refused', ;
+         "proceso con transicion 'go' al estado inexistente 'nowhere': Validate falla y el motor responde invalid process definition" )
 
       TLine( 'user', "> rombo que devuelve etiqueta inexistente" )
 
@@ -370,7 +415,8 @@ STATIC FUNCTION TestBpm_Engine()
       hRes := oEng:Run( oBad, uAna, 'go', { 'id' => 'B-1' } )
 
       TLine( 'sys', 'motor responde: ' + hRes[ 'error' ] )
-      TCheck( ! hRes[ 'ok' ] .AND. 'unknown branch' $ hRes[ 'error' ], 'decision with unknown branch refused' )
+      TCheck( ! hRes[ 'ok' ] .AND. 'unknown branch' $ hRes[ 'error' ], 'decision with unknown branch refused', ;
+         "el rombo devuelve 'maybe' pero solo tiene la rama 'yes': el motor responde unknown branch" )
 
       TLine( 'user', "> dos rombos en ciclo -> freno anti-bucles" )
 
@@ -388,7 +434,8 @@ STATIC FUNCTION TestBpm_Engine()
       hRes := oEng:Run( oLoop, uAna, 'go', { 'id' => 'L-1' } )
 
       TLine( 'sys', 'motor responde: ' + hRes[ 'error' ] )
-      TCheck( ! hRes[ 'ok' ] .AND. 'max steps' $ hRes[ 'error' ], 'decision loop stopped by guard' )
+      TCheck( ! hRes[ 'ok' ] .AND. 'max steps' $ hRes[ 'error' ], 'decision loop stopped by guard', ;
+         'dos rombos d1->d2->d1 en ciclo infinito: el freno anti-bucles corta con max steps' )
 
       TLine( 'user', "> regla limit en receive (max 10000)" )
 
@@ -398,12 +445,16 @@ STATIC FUNCTION TestBpm_Engine()
       hRes := oEng:Run( oBad, uAna, 'receive', { 'id' => 'F-6', 'supplier' => 'ACME', 'amount' => 20000 } )
 
       TLine( 'sys', 'motor responde: ' + hRes[ 'error' ] )
-      TCheck( ! hRes[ 'ok' ] .AND. 'limit exceeded' $ hRes[ 'error' ], 'limit rule on receive' )
+      TCheck( ! hRes[ 'ok' ] .AND. 'limit exceeded' $ hRes[ 'error' ], 'limit rule on receive', ;
+         'regla limit (amount max 10000) probada con amount=20000: el motor responde limit exceeded' )
 
-      TCheck( oEng:Get( oProc, 'NOPE' ) == NIL, 'get unknown returns NIL' )
-      TCheck( Empty( oEng:History( oProc, 'NOPE' ) ), 'history unknown returns empty' )
+      TCheck( oEng:Get( oProc, 'NOPE' ) == NIL, 'get unknown returns NIL', ;
+         "Get('NOPE') sobre el proceso devuelve NIL en vez de romper" )
+      TCheck( Empty( oEng:History( oProc, 'NOPE' ) ), 'history unknown returns empty', ;
+         "History('NOPE') devuelve un array vacio en vez de romper" )
 
-      TCheck( Len( oEng:Get( oProc, 'F-2' )[ 'history' ] ) == 3, 'F-2 history: receive + route + manual_approve' )
+      TCheck( Len( oEng:Get( oProc, 'F-2' )[ 'history' ] ) == 3, 'F-2 history: receive + route + manual_approve', ;
+         'el historial de F-2 tiene 3 pasos: receive, el enrutado del rombo y manual_approve' )
 
    CATCH oErr
 
@@ -431,17 +482,28 @@ STATIC FUNCTION TestBpm_Definition()
       oProc := SimpleInvoiceProcess()
       hVal  := oProc:Validate()
 
-      TCheck( hVal[ 'ok' ], 'invoice definition validates' )
-      TCheck( oProc:IsState( 'RECEIVED' ) .AND. oProc:IsState( ' received ' ), 'state names case/space safe' )
-      TCheck( oProc:IsAction( 'Auto_Approve' ) .AND. oProc:IsDecision( 'COMPLETE' ), 'action/decision names canon' )
-      TCheck( ! oProc:IsState( 'approved2' ), 'unknown state refused' )
-      TCheck( oProc:IsTransition( 'receive' ), 'transition registered' )
-      TCheck( oProc:hTransitions[ 'receive' ][ 'state' ] == 'received', 'transition lands in received' )
-      TCheck( oProc:hActions[ 'manual_approve' ][ 'manual' ], 'manual flag kept' )
-      TCheck( ! oProc:hActions[ 'auto_approve' ][ 'manual' ], 'auto flag default' )
-      TCheck( oProc:hStateDecision[ 'received' ] == 'complete', 'state wired to decision' )
-      TCheck( oProc:hDecisions[ 'complete' ][ 'yes' ] == 'check_amount', 'branch to decision kept' )
-      TCheck( hb_HHasKey( oProc:hRules, 'receive' ) .AND. hb_HHasKey( oProc:hRules, 'manual_approve' ), 'rules registered' )
+      TCheck( hVal[ 'ok' ], 'invoice definition validates', ;
+         'Validate() reviso la definicion completa de invoice_simple (estados, transiciones, acciones, rombos, reglas) sin encontrar errores' )
+      TCheck( oProc:IsState( 'RECEIVED' ) .AND. oProc:IsState( ' received ' ), 'state names case/space safe', ;
+         "IsState('RECEIVED') e IsState(' received ') encuentran 'received': los nombres se normalizan (canon)" )
+      TCheck( oProc:IsAction( 'Auto_Approve' ) .AND. oProc:IsDecision( 'COMPLETE' ), 'action/decision names canon', ;
+         "IsAction('Auto_Approve') e IsDecision('COMPLETE') tambien normalizan mayusculas y minusculas" )
+      TCheck( ! oProc:IsState( 'approved2' ), 'unknown state refused', ;
+         "IsState('approved2') responde .F.: ese estado no existe en la definicion" )
+      TCheck( oProc:IsTransition( 'receive' ), 'transition registered', ;
+         "IsTransition('receive'): la transicion de entrada quedo registrada en la definicion" )
+      TCheck( oProc:hTransitions[ 'receive' ][ 'state' ] == 'received', 'transition lands in received', ;
+         "la transicion 'receive' apunta al estado 'received'" )
+      TCheck( oProc:hActions[ 'manual_approve' ][ 'manual' ], 'manual flag kept', ;
+         'manual_approve se declaro con manual=.T.: espera firma humana' )
+      TCheck( ! oProc:hActions[ 'auto_approve' ][ 'manual' ], 'auto flag default', ;
+         'auto_approve no se declaro manual: por defecto una accion es automatica' )
+      TCheck( oProc:hStateDecision[ 'received' ] == 'complete', 'state wired to decision', ;
+         "el estado 'received' tiene enganchado el rombo 'complete'" )
+      TCheck( oProc:hDecisions[ 'complete' ][ 'yes' ] == 'check_amount', 'branch to decision kept', ;
+         "la rama 'yes' del rombo 'complete' encadena con otro rombo: 'check_amount'" )
+      TCheck( hb_HHasKey( oProc:hRules, 'receive' ) .AND. hb_HHasKey( oProc:hRules, 'manual_approve' ), 'rules registered', ;
+         "hay reglas colgadas de 'receive' (fields) y de 'manual_approve' (roles)" )
 
       TLine( 'user', '> definiciones rotas: Validate explica cada error' )
 
@@ -450,7 +512,8 @@ STATIC FUNCTION TestBpm_Definition()
       oProc:AddTransition( 'go', 'nowhere' )
       hVal := oProc:Validate()
       TLine( 'sys', hVal[ 'errors' ][ 1 ] )
-      TCheck( ! hVal[ 'ok' ] .AND. 'unknown state' $ hVal[ 'errors' ][ 1 ], 'transition to unknown state' )
+      TCheck( ! hVal[ 'ok' ] .AND. 'unknown state' $ hVal[ 'errors' ][ 1 ], 'transition to unknown state', ;
+         "proceso roto a proposito: transicion 'go' -> 'nowhere'; Validate explica: unknown state nowhere" )
 
       oProc := ProcessDefinition():New( 'broken2' )
       oProc:AddState( 'a' )
@@ -458,35 +521,40 @@ STATIC FUNCTION TestBpm_Definition()
       oProc:SetHandler( 'd', {|| 'yes' } )
       hVal := oProc:Validate()
       TLine( 'sys', hVal[ 'errors' ][ 1 ] )
-      TCheck( ! hVal[ 'ok' ] .AND. 'unknown target' $ hVal[ 'errors' ][ 1 ], 'branch to unknown target' )
+      TCheck( ! hVal[ 'ok' ] .AND. 'unknown target' $ hVal[ 'errors' ][ 1 ], 'branch to unknown target', ;
+         "rombo con rama yes -> 'ghost' (inexistente); Validate explica: unknown target ghost" )
 
       oProc := ProcessDefinition():New( 'broken3' )
       oProc:AddState( 'a' )
       oProc:AddAction( 'act', 'a' )
       hVal := oProc:Validate()
       TLine( 'sys', hVal[ 'errors' ][ 1 ] )
-      TCheck( ! hVal[ 'ok' ] .AND. 'missing handler' $ hVal[ 'errors' ][ 1 ], 'action without handler' )
+      TCheck( ! hVal[ 'ok' ] .AND. 'missing handler' $ hVal[ 'errors' ][ 1 ], 'action without handler', ;
+         "accion 'act' declarada sin handler; Validate explica: missing handler" )
 
       oProc := ProcessDefinition():New( 'broken4' )
       oProc:AddState( 'a' )
       oProc:SetDecision( 'ghost', 'd' )
       hVal := oProc:Validate()
       TLine( 'sys', hVal[ 'errors' ][ 1 ] )
-      TCheck( ! hVal[ 'ok' ] .AND. 'unknown state' $ hVal[ 'errors' ][ 1 ], 'setdecision unknown state' )
+      TCheck( ! hVal[ 'ok' ] .AND. 'unknown state' $ hVal[ 'errors' ][ 1 ], 'setdecision unknown state', ;
+         "SetDecision sobre el estado inexistente 'ghost'; Validate explica: unknown state ghost" )
 
       oProc := ProcessDefinition():New( 'broken5' )
       oProc:AddState( 'a' )
       oProc:AddRule( 'ghost', 'roles', { 'x' } )
       hVal := oProc:Validate()
       TLine( 'sys', hVal[ 'errors' ][ 1 ] )
-      TCheck( ! hVal[ 'ok' ] .AND. 'unknown node' $ hVal[ 'errors' ][ 1 ], 'rule on unknown node' )
+      TCheck( ! hVal[ 'ok' ] .AND. 'unknown node' $ hVal[ 'errors' ][ 1 ], 'rule on unknown node', ;
+         "regla 'roles' colgada del nodo inexistente 'ghost'; Validate explica: unknown node ghost" )
 
       oProc := ProcessDefinition():New( 'broken6' )
       oProc:AddState( 'a' )
       oProc:AddAction( 'act', 'a' )
       oProc:SetHandler( 'act', 'not a block' )
       hVal := oProc:Validate()
-      TCheck( ! hVal[ 'ok' ], 'non-block handler refused' )
+      TCheck( ! hVal[ 'ok' ], 'non-block handler refused', ;
+         "SetHandler('act', 'not a block') con un texto en vez de un bloque de codigo: Validate lo rechaza" )
 
    CATCH oErr
 
