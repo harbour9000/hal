@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+
+	@view 'common/header.html'
+
+	<link href='/public/css/main.css' rel='stylesheet'>
+
+	<style>
+		.hal-wrap    { max-width: 720px; margin: 0 auto; }
+		.hal-console {
+			background: #0b0b0b;
+			color: #19c37d;
+			font-family: ui-monospace, Menlo, Consolas, monospace;
+			font-size: .9rem;
+			padding: 10px 12px;
+			border-radius: 6px;
+			overflow-y: auto;
+			white-space: pre-wrap;
+			word-break: break-word;
+			flex: 1 1 auto;
+			min-height: 0;
+		}
+		.hal-console .ln-user { color: #9cdcfe; }
+		.hal-console .ln-ok   { color: #19c37d; }
+		.hal-console .ln-warn { color: #ffd54f; }
+		.hal-console .ln-err  { color: #ff6b6b; }
+		.hal-console .ln-sys  { color: #888;    }
+	</style>
+
+</head>
+
+<body>
+
+	<!-- Top navbar -->
+	@view 'common/navbar.html'
+
+	<main class="container-fluid hal-wrap pt-4 pb-3 mt-4 d-flex flex-column"
+	      style="height:calc(100vh - 120px);height:calc(100dvh - 120px)">
+
+		<label for="hal-input" class="form-label fw-bold flex-shrink-0">Prompt</label>
+		<textarea id="hal-input" class="form-control flex-shrink-0" rows="4"
+		          placeholder="Pregunta sobre la empresa y pulsa Enviar..."></textarea>
+
+		<div class="d-flex gap-2 mt-2 flex-shrink-0">
+			<button id="hal-send" class="btn btn-success flex-grow-1">
+				<i class="bi bi-send me-1"></i>Enviar
+			</button>
+			<button id="hal-mic" type="button"
+			        class="btn btn-outline-success d-none"
+			        title="Dictar por voz" aria-label="Dictar por voz">
+				<i class="bi bi-mic"></i>
+			</button>
+		</div>
+
+		<label class="form-label fw-bold mt-3 flex-shrink-0">Consola</label>
+		<div id="hal-console" class="hal-console"></div>
+
+	</main>
+
+	<!-- Result modal (SQL / INFO / ERROR) -->
+	<div class="modal fade" id="sqlModal" tabindex="-1" aria-labelledby="sqlModalLabel" aria-hidden="true">
+		<div class="modal-dialog modal-xl modal-dialog-scrollable">
+			<div class="modal-content">
+				<div class="modal-header">
+					<h5 class="modal-title" id="sqlModalLabel"><i id="sqlModalIcon" class="bi bi-table me-2"></i><span id="sqlModalTitle">SQL result</span></h5>
+					<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+				</div>
+				<div class="modal-body" id="sqlModalBody"></div>
+				<div class="modal-footer">
+					<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<!-- Help modal -->
+	<div class="modal fade" id="helpModal" tabindex="-1" aria-labelledby="helpModalLabel" aria-hidden="true">
+		<div class="modal-dialog modal-dialog-centered">
+			<div class="modal-content">
+				<div class="modal-header">
+					<h5 class="modal-title" id="helpModalLabel"><i class="bi bi-question-circle me-2"></i>Help</h5>
+					<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+				</div>
+				<div class="modal-body">
+					Soy tu assistente de información de la empresa. 
+               <i class="bi bi-alexa"></i>
+               <br><br>
+               Cualquier dato que necesites, solo tienes 
+               que pedirlo y te ayudaré a encontarlo.
+               <br><br>
+					Que tipo de información ? Eso lo habrás de descubrir... 
+               <i class="bi bi-emoji-smile"></i>
+				</div>
+				<div class="modal-footer">
+					<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<!-- Bottom navbar (same style as /hi project) -->
+	<nav class="navbar navbar-dark bg-dark fixed-bottom p-0">
+		<div class="d-flex w-100" role="group" aria-label="Bottom navigation">
+			<a href="/" class="btn btn-dark rounded-0 py-2 w-25 flex-grow-0 flex-shrink-0">
+				<i class="bi bi-house"></i><span class="btn-lbl">Home</span>
+			</a>
+			<button id="hal-help" type="button"
+			        class="btn btn-dark rounded-0 py-2 w-25 flex-grow-0 flex-shrink-0">
+				<i class="bi bi-question-circle"></i><span class="btn-lbl">Help</span>
+			</button>
+		</div>
+	</nav>
+
+	<script>
+		(function () {
+
+			const $input         = document.getElementById('hal-input');
+			const $send          = document.getElementById('hal-send');
+			const $console       = document.getElementById('hal-console');
+			const $help          = document.getElementById('hal-help');
+			const $helpModal     = document.getElementById('helpModal');
+			const $sqlModal      = document.getElementById('sqlModal');
+			const $sqlModalBody  = document.getElementById('sqlModalBody');
+			const $sqlModalIcon  = document.getElementById('sqlModalIcon');
+			const $sqlModalTitle = document.getElementById('sqlModalTitle');
+
+			function showResultPopup(kind, body, isHtml) {
+				const cfg = {
+					'SQL':   { icon: 'bi-table',             title: 'SQL result' },
+					'INFO':  { icon: 'bi-info-circle',       title: 'Info'       },
+					'ERROR': { icon: 'bi-exclamation-circle', title: 'Error'      }
+				}[kind] || { icon: 'bi-chat-left-text', title: kind || 'Result' };
+
+				$sqlModalIcon.className  = 'bi ' + cfg.icon + ' me-2';
+				$sqlModalTitle.textContent = cfg.title;
+
+				if (isHtml) {
+					$sqlModalBody.innerHTML = body || '';
+				} else {
+					$sqlModalBody.textContent = body || '';
+				}
+
+				try {
+					bootstrap.Modal.getOrCreateInstance($sqlModal).show();
+				} catch (e) {
+					const w = window.open('', '_blank');
+					if (w) { w.document.write(body || ''); w.document.close(); }
+				}
+			}
+
+			function stamp() {
+				const d = new Date();
+				const pad = n => String(n).padStart(2, '0');
+				return pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+			}
+
+			function log(kind, text) {
+				const line = document.createElement('div');
+				line.className = 'ln-' + kind;
+				line.textContent = '[' + stamp() + '] ' + text;
+				$console.appendChild(line);
+				$console.scrollTop = $console.scrollHeight;
+			}
+
+			let es = null;
+
+			function nonce() {
+				return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+			}
+
+			function finish() {
+				if (es) { es.close(); es = null; }
+				$send.disabled = false;
+			}
+
+			function send() {
+				const text = $input.value.trim();
+				if (!text) { log('sys', 'texto vacio'); return; }
+				if (es)    { return; }
+
+				$console.innerHTML = '';
+				log('user', '> ' + text);
+				$input.value = '';
+				$send.disabled = true;
+
+				const url = '/send/' + nonce() + '?text=' + encodeURIComponent(text);
+				es = new EventSource(url);
+
+				let lastPopup = null;   // { kind, body, isHtml }
+
+				es.onmessage = ev => {
+					let h;
+					try { h = JSON.parse(ev.data); }
+					catch (e) { log('err', 'bad payload: ' + ev.data); return; }
+
+					if (h.done) {
+						log('sys', '[SYS] stream cerrado');
+						if (lastPopup) {
+							showResultPopup(lastPopup.kind, lastPopup.body, lastPopup.isHtml);
+						}
+						finish();
+						return;
+					}
+
+					if (h.ok === false) {
+						log('err', (h.error || JSON.stringify(h)));
+						lastPopup = { kind: 'ERROR', body: (h.error || JSON.stringify(h)), isHtml: false };
+						return;
+					}
+
+					const kind = (h.type === 'INFO')  ? 'warn'
+					           : (h.type === 'ERROR') ? 'err'
+					           : (h.type === 'SYS')   ? 'sys'
+					           : 'ok';
+					log(kind, '[' + (h.type || '') + '] ' + (h.request || JSON.stringify(h)));
+
+					if (h.type === 'SQL' && h.html) {
+						lastPopup = { kind: 'SQL', body: h.html, isHtml: true };
+					} else if (h.type === 'INFO') {
+						lastPopup = { kind: 'INFO', body: (h.request || JSON.stringify(h)), isHtml: false };
+					} else if (h.type === 'ERROR') {
+						lastPopup = { kind: 'ERROR', body: (h.request || h.error || JSON.stringify(h)), isHtml: false };
+					}
+				};
+
+				es.onerror = () => {
+					if (es) { log('sys', '[SYS] conexion cerrada'); finish(); }
+				};
+			}
+
+			$send.addEventListener('click', send);
+			$input.addEventListener('keydown', function (e) {
+				if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); send(); }
+			});
+
+			$help.addEventListener('click', function () {
+				try { bootstrap.Modal.getOrCreateInstance($helpModal).show(); }
+				catch (e) { /* bootstrap not loaded */ }
+			});
+
+			const $mic = document.getElementById('hal-mic');
+			const SR   = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+			if (SR && $mic) {
+				const recognition = new SR();
+				recognition.lang           = 'es-ES';
+				recognition.continuous     = false;
+				recognition.interimResults = false;
+
+				let listening = false;
+
+				function setListening(on) {
+					listening = on;
+					$mic.classList.toggle('btn-outline-success', !on);
+					$mic.classList.toggle('btn-danger', on);
+					$mic.querySelector('i').className = on ? 'bi bi-mic-fill' : 'bi bi-mic';
+				}
+
+				$mic.classList.remove('d-none');
+
+				$mic.addEventListener('click', function () {
+					if (listening) { recognition.stop(); return; }
+					try { recognition.start(); setListening(true); log('sys', 'escuchando...'); }
+					catch (e) { log('err', 'mic: ' + e.message); }
+				});
+
+				recognition.onresult = function (ev) {
+					const txt = ev.results[0][0].transcript;
+					$input.value = txt;
+					$input.focus();
+					log('user', '[mic] ' + txt);
+				};
+
+				recognition.onerror = function (ev) {
+					log('err', 'mic error: ' + ev.error);
+				};
+
+				recognition.onend = function () { setListening(false); };
+			}
+
+			log('sys', 'Welcome !');
+
+			window.addEventListener('load', function () {
+				try { bootstrap.Modal.getOrCreateInstance($helpModal).show(); }
+				catch (e) { /* bootstrap not loaded */ }
+			});
+
+		})();
+	</script>
+
+</body>
+</html>
