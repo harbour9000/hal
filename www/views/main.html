@@ -7,13 +7,16 @@
 	<link href='/public/css/main.css' rel='stylesheet'>
 
 	<style>
-		.hal-wrap    { max-width: 720px; margin: 0 auto; }
+		/* main.css limita body a 600px: esta pantalla lo ensancha */
+		body         { max-width: 1140px; }
+		.hal-wrap    { max-width: 1100px; margin: 0 auto; }
 		.hal-console {
-			background: #0b0b0b;
-			color: #19c37d;
+			background: #0d1117;
+			border: 1px solid #21262d;
+			color: #adbac7;
 			font-family: ui-monospace, Menlo, Consolas, monospace;
 			font-size: .9rem;
-			padding: 10px 12px;
+			padding: 10px 14px;
 			border-radius: 6px;
 			overflow-y: auto;
 			white-space: pre-wrap;
@@ -21,11 +24,24 @@
 			flex: 1 1 auto;
 			min-height: 0;
 		}
-		.hal-console .ln-user { color: #9cdcfe; }
-		.hal-console .ln-ok   { color: #19c37d; }
-		.hal-console .ln-warn { color: #ffd54f; }
-		.hal-console .ln-err  { color: #ff6b6b; }
-		.hal-console .ln-sys  { color: #888;    }
+		/* Paleta de la traza: cada tipo de linea con su color */
+		.hal-console .ln-suite { color: #56d4dd; font-weight: 700; margin-top: 6px; }
+		.hal-console .ln-user  { color: #9cdcfe; }
+		.hal-console .ln-ok    { color: #3fb950; }
+		.hal-console .ln-warn  { color: #ffd54f; }
+		.hal-console .ln-err   { color: #ff7b72; font-weight: 700; }
+		.hal-console .ln-sys   { color: #8b949e; }
+		/* Veredicto final: banda verde/roja para verlo de un vistazo */
+		.hal-console .ln-pass {
+			color: #3fb950; font-weight: 700;
+			background: rgba(63,185,80,.12);
+			border-radius: 4px; padding: 4px 8px; margin-top: 8px;
+		}
+		.hal-console .ln-fail {
+			color: #ff7b72; font-weight: 700;
+			background: rgba(255,123,114,.12);
+			border-radius: 4px; padding: 4px 8px; margin-top: 8px;
+		}
 	</style>
 
 </head>
@@ -38,22 +54,10 @@
 	<main class="container-fluid hal-wrap pt-4 pb-3 mt-4 d-flex flex-column"
 	      style="height:calc(100vh - 120px);height:calc(100dvh - 120px)">
 
-		<label for="hal-input" class="form-label fw-bold flex-shrink-0">Prompt</label>
-		<textarea id="hal-input" class="form-control flex-shrink-0" rows="4"
-		          placeholder="Pregunta sobre la empresa y pulsa Enviar..."></textarea>
-
-		<div class="d-flex gap-2 mt-2 flex-shrink-0">
-			<button id="hal-send" class="btn btn-success flex-grow-1">
-				<i class="bi bi-send me-1"></i>Enviar
-			</button>
-			<button id="hal-test" type="button" class="btn btn-outline-success"
-			        title="Lanzar el test del proceso invoice_simple">
+		<div class="d-flex gap-2 flex-shrink-0">
+			<button id="hal-test" type="button" class="btn btn-success btn-lg w-100"
+			        title="Lanzar las 3 suites de tests del BPM (60 checks)">
 				<i class="bi bi-play-circle me-1"></i>Test
-			</button>
-			<button id="hal-mic" type="button"
-			        class="btn btn-outline-success d-none"
-			        title="Dictar por voz" aria-label="Dictar por voz">
-				<i class="bi bi-mic"></i>
 			</button>
 		</div>
 
@@ -61,22 +65,6 @@
 		<div id="hal-console" class="hal-console"></div>
 
 	</main>
-
-	<!-- Result modal (SQL / INFO / ERROR) -->
-	<div class="modal fade" id="sqlModal" tabindex="-1" aria-labelledby="sqlModalLabel" aria-hidden="true">
-		<div class="modal-dialog modal-xl modal-dialog-scrollable">
-			<div class="modal-content">
-				<div class="modal-header">
-					<h5 class="modal-title" id="sqlModalLabel"><i id="sqlModalIcon" class="bi bi-table me-2"></i><span id="sqlModalTitle">SQL result</span></h5>
-					<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-				</div>
-				<div class="modal-body" id="sqlModalBody"></div>
-				<div class="modal-footer">
-					<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-				</div>
-			</div>
-		</div>
-	</div>
 
 	<!-- Help modal -->
 	<div class="modal fade" id="helpModal" tabindex="-1" aria-labelledby="helpModalLabel" aria-hidden="true">
@@ -87,14 +75,15 @@
 					<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
 				</div>
 				<div class="modal-body">
-					Soy tu assistente de información de la empresa. 
-               <i class="bi bi-alexa"></i>
-               <br><br>
-               Cualquier dato que necesites, solo tienes 
-               que pedirlo y te ayudaré a encontarlo.
-               <br><br>
-					Que tipo de información ? Eso lo habrás de descubrir... 
-               <i class="bi bi-emoji-smile"></i>
+					Pulsa <b>Test</b> y se lanzan las 3 suites de tests del BPM
+					(60 checks en total).
+					<br><br>
+					La consola muestra la traza paso a paso de lo que va
+					haciendo cada test, con colores: cabecera de suite en cyan,
+					acciones en azul, checks superados en verde y fallos en rojo.
+					<br><br>
+					Al acabar, una banda final resume el veredicto:
+					TEST PASS o TEST FAIL.
 				</div>
 				<div class="modal-footer">
 					<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
@@ -119,40 +108,10 @@
 	<script>
 		(function () {
 
-			const $input         = document.getElementById('hal-input');
-			const $send          = document.getElementById('hal-send');
-			const $test          = document.getElementById('hal-test');
-			const $console       = document.getElementById('hal-console');
-			const $help          = document.getElementById('hal-help');
-			const $helpModal     = document.getElementById('helpModal');
-			const $sqlModal      = document.getElementById('sqlModal');
-			const $sqlModalBody  = document.getElementById('sqlModalBody');
-			const $sqlModalIcon  = document.getElementById('sqlModalIcon');
-			const $sqlModalTitle = document.getElementById('sqlModalTitle');
-
-			function showResultPopup(kind, body, isHtml) {
-				const cfg = {
-					'SQL':   { icon: 'bi-table',             title: 'SQL result' },
-					'INFO':  { icon: 'bi-info-circle',       title: 'Info'       },
-					'ERROR': { icon: 'bi-exclamation-circle', title: 'Error'      }
-				}[kind] || { icon: 'bi-chat-left-text', title: kind || 'Result' };
-
-				$sqlModalIcon.className  = 'bi ' + cfg.icon + ' me-2';
-				$sqlModalTitle.textContent = cfg.title;
-
-				if (isHtml) {
-					$sqlModalBody.innerHTML = body || '';
-				} else {
-					$sqlModalBody.textContent = body || '';
-				}
-
-				try {
-					bootstrap.Modal.getOrCreateInstance($sqlModal).show();
-				} catch (e) {
-					const w = window.open('', '_blank');
-					if (w) { w.document.write(body || ''); w.document.close(); }
-				}
-			}
+			const $test      = document.getElementById('hal-test');
+			const $console   = document.getElementById('hal-console');
+			const $help      = document.getElementById('hal-help');
+			const $helpModal = document.getElementById('helpModal');
 
 			function stamp() {
 				const d = new Date();
@@ -160,6 +119,7 @@
 				return pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
 			}
 
+			// Mensajes del sistema, con hora
 			function log(kind, text) {
 				const line = document.createElement('div');
 				line.className = 'ln-' + kind;
@@ -168,89 +128,31 @@
 				$console.scrollTop = $console.scrollHeight;
 			}
 
-			let es = null;
-
-			function nonce() {
-				return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+			// Lineas de la traza del test, sin hora: 100+ lineas con el
+			// mismo timestamp serian ruido; el color ya marca el tipo
+			function logLine(kind, text) {
+				const line = document.createElement('div');
+				line.className = 'ln-' + kind;
+				line.textContent = text;
+				$console.appendChild(line);
+				$console.scrollTop = $console.scrollHeight;
 			}
 
-			function finish() {
-				if (es) { es.close(); es = null; }
-				$send.disabled = false;
-			}
-
-			function send() {
-				const text = $input.value.trim();
-				if (!text) { log('sys', 'texto vacio'); return; }
-				if (es)    { return; }
-
-				$console.innerHTML = '';
-				log('user', '> ' + text);
-				$input.value = '';
-				$send.disabled = true;
-
-				const url = '/send/' + nonce() + '?text=' + encodeURIComponent(text);
-				es = new EventSource(url);
-
-				let lastPopup = null;   // { kind, body, isHtml }
-
-				es.onmessage = ev => {
-					let h;
-					try { h = JSON.parse(ev.data); }
-					catch (e) { log('err', 'bad payload: ' + ev.data); return; }
-
-					if (h.done) {
-						log('sys', '[SYS] stream cerrado');
-						if (lastPopup) {
-							showResultPopup(lastPopup.kind, lastPopup.body, lastPopup.isHtml);
-						}
-						finish();
-						return;
-					}
-
-					if (h.ok === false) {
-						log('err', (h.error || JSON.stringify(h)));
-						lastPopup = { kind: 'ERROR', body: (h.error || JSON.stringify(h)), isHtml: false };
-						return;
-					}
-
-					const kind = (h.type === 'INFO')  ? 'warn'
-					           : (h.type === 'ERROR') ? 'err'
-					           : (h.type === 'SYS')   ? 'sys'
-					           : 'ok';
-					log(kind, '[' + (h.type || '') + '] ' + (h.request || JSON.stringify(h)));
-
-					if (h.type === 'SQL' && h.html) {
-						lastPopup = { kind: 'SQL', body: h.html, isHtml: true };
-					} else if (h.type === 'INFO') {
-						lastPopup = { kind: 'INFO', body: (h.request || JSON.stringify(h)), isHtml: false };
-					} else if (h.type === 'ERROR') {
-						lastPopup = { kind: 'ERROR', body: (h.request || h.error || JSON.stringify(h)), isHtml: false };
-					}
-				};
-
-				es.onerror = () => {
-					if (es) { log('sys', '[SYS] conexion cerrada'); finish(); }
-				};
-			}
-
-			$send.addEventListener('click', send);
-
-			// Lanza el test del BPM y pinta lo que va haciendo en la consola
+			// Lanza las 3 suites del BPM y pinta toda la traza en consola
 			async function runTest() {
 				$console.innerHTML = '';
-				log('sys', 'Lanzando test invoice_simple...');
+				log('sys', 'Lanzando tests del BPM (3 suites, 60 checks)...');
 				$test.disabled = true;
 				try {
-					const rsp  = await fetch('/test?name=invoice_simple');
+					const rsp  = await fetch('/test?name=all');
 					const data = await rsp.json();
 					if (data.error) { log('err', data.error); return; }
 					for (const ln of (data.lines || [])) {
-						log(ln.kind || 'sys', ln.text || '');
+						logLine(ln.kind || 'sys', ln.text || '');
 					}
-					log(data.ok ? 'ok' : 'err', data.ok
-						? 'TEST PASS (' + data.pass + ' checks)'
-						: 'TEST FAIL (' + data.fail + ' fallos)');
+					logLine(data.ok ? 'pass' : 'fail', data.ok
+						? 'TEST PASS - ' + data.pass + ' checks OK en las 3 suites'
+						: 'TEST FAIL - ' + data.fail + ' fallos de ' + (data.pass + data.fail) + ' checks');
 				} catch (e) {
 					log('err', 'test request failed: ' + e.message);
 				} finally {
@@ -259,61 +161,13 @@
 			}
 
 			$test.addEventListener('click', runTest);
-			$input.addEventListener('keydown', function (e) {
-				if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); send(); }
-			});
 
 			$help.addEventListener('click', function () {
 				try { bootstrap.Modal.getOrCreateInstance($helpModal).show(); }
 				catch (e) { /* bootstrap not loaded */ }
 			});
 
-			const $mic = document.getElementById('hal-mic');
-			const SR   = window.SpeechRecognition || window.webkitSpeechRecognition;
-
-			if (SR && $mic) {
-				const recognition = new SR();
-				recognition.lang           = 'es-ES';
-				recognition.continuous     = false;
-				recognition.interimResults = false;
-
-				let listening = false;
-
-				function setListening(on) {
-					listening = on;
-					$mic.classList.toggle('btn-outline-success', !on);
-					$mic.classList.toggle('btn-danger', on);
-					$mic.querySelector('i').className = on ? 'bi bi-mic-fill' : 'bi bi-mic';
-				}
-
-				$mic.classList.remove('d-none');
-
-				$mic.addEventListener('click', function () {
-					if (listening) { recognition.stop(); return; }
-					try { recognition.start(); setListening(true); log('sys', 'escuchando...'); }
-					catch (e) { log('err', 'mic: ' + e.message); }
-				});
-
-				recognition.onresult = function (ev) {
-					const txt = ev.results[0][0].transcript;
-					$input.value = txt;
-					$input.focus();
-					log('user', '[mic] ' + txt);
-				};
-
-				recognition.onerror = function (ev) {
-					log('err', 'mic error: ' + ev.error);
-				};
-
-				recognition.onend = function () { setListening(false); };
-			}
-
-			log('sys', 'Welcome !');
-
-			window.addEventListener('load', function () {
-				try { bootstrap.Modal.getOrCreateInstance($helpModal).show(); }
-				catch (e) { /* bootstrap not loaded */ }
-			});
+			log('sys', 'Welcome ! Pulsa Test para lanzar las 3 suites.');
 
 		})();
 	</script>

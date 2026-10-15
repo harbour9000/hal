@@ -74,6 +74,11 @@ FUNCTION Main()
       hRes[ 'pass' ] += hSuite[ 'pass' ]
       hRes[ 'fail' ] += hSuite[ 'fail' ]
 
+      // Cabecera de la suite: la consola la pinta con color propio
+      AAdd( hRes[ 'lines' ], { 'kind' => 'suite', ;
+         'text' => '== suite ' + hSuite[ 'name' ] + ': ' + hb_ntos( hSuite[ 'pass' ] ) + ;
+            iif( hSuite[ 'fail' ] == 0, ' checks OK', ' checks, ' + hb_ntos( hSuite[ 'fail' ] ) + ' FALLOS' ) + ' ==' } )
+
       FOR EACH hLine IN hSuite[ 'lines' ]
 
          AAdd( hRes[ 'lines' ], hLine )
