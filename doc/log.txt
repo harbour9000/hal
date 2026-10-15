@@ -1,0 +1,167 @@
+[19:10:11] Lanzando tests del BPM (3 suites, 60 checks)...
+== suite process_definition: 17 checks OK ==
+--- test process_definition: construccion y Validate ---
+PASS invoice definition validates
+Validate() reviso la definicion completa de invoice_simple (estados, transiciones, acciones, rombos, reglas) sin encontrar errores
+PASS state names case/space safe
+IsState('RECEIVED') e IsState(' received ') encuentran 'received': los nombres se normalizan (canon)
+PASS action/decision names canon
+IsAction('Auto_Approve') e IsDecision('COMPLETE') tambien normalizan mayusculas y minusculas
+PASS unknown state refused
+IsState('approved2') responde .F.: ese estado no existe en la definicion
+PASS transition registered
+IsTransition('receive'): la transicion de entrada quedo registrada en la definicion
+PASS transition lands in received
+la transicion 'receive' apunta al estado 'received'
+PASS manual flag kept
+manual_approve se declaro con manual=.T.: espera firma humana
+PASS auto flag default
+auto_approve no se declaro manual: por defecto una accion es automatica
+PASS state wired to decision
+el estado 'received' tiene enganchado el rombo 'complete'
+PASS branch to decision kept
+la rama 'yes' del rombo 'complete' encadena con otro rombo: 'check_amount'
+PASS rules registered
+hay reglas colgadas de 'receive' (fields) y de 'manual_approve' (roles)
+> definiciones rotas: Validate explica cada error
+transition go: unknown state nowhere
+PASS transition to unknown state
+proceso roto a proposito: transicion 'go' -> 'nowhere'; Validate explica: unknown state nowhere
+decision d branch yes: unknown target ghost
+PASS branch to unknown target
+rombo con rama yes -> 'ghost' (inexistente); Validate explica: unknown target ghost
+action act: missing handler
+PASS action without handler
+accion 'act' declarada sin handler; Validate explica: missing handler
+setdecision: unknown state ghost
+PASS setdecision unknown state
+SetDecision sobre el estado inexistente 'ghost'; Validate explica: unknown state ghost
+rules on unknown node ghost
+PASS rule on unknown node
+regla 'roles' colgada del nodo inexistente 'ghost'; Validate explica: unknown node ghost
+PASS non-block handler refused
+SetHandler('act', 'not a block') con un texto en vez de un bloque de codigo: Validate lo rechaza
+process_definition: 17 checks OK, 0 fallos
+== suite bpm_engine: 30 checks OK ==
+--- test bpm_engine: motor, reglas y errores ---
+> Run receive F-1 (500) -> cascada automatica
+PASS receive ok
+Run('receive', {id='F-1', supplier='ACME', amount=500}) aceptado por el motor
+PASS auto path reaches approved
+amount=500 < 1000: la cascada automatica llega sola hasta el estado 'approved'
+PASS auto path has nothing pending
+tras la cascada no queda ninguna accion manual pendiente en F-1
+PASS auto_approve executed by cascade
+en 'executed' solo aparece 'auto_approve': la unica accion automatica del camino de F-1
+PASS auto handler ran
+el handler de auto_approve corrio en la cascada y grabo approved_by='system' en F-1
+PASS history: receive + auto_approve
+el historial de F-1 tiene exactamente 2 pasos: receive y auto_approve
+> Run receive F-2 (1500) -> espera manual
+PASS manual path waits in received
+F-2 (amount=1500 >= 1000) no puede auto-aprobarse: espera en 'received'
+PASS manual_approve pending
+el motor devuelve pending='manual_approve': falta la firma humana en F-2
+> Run manual_approve F-2 SIN rol -> rechazo
+motor responde: role not allowed for manual_approve
+PASS manual approve refused without role
+ana tiene rol 'clerk' y la regla roles de manual_approve exige 'approver': el motor responde role not allowed
+> Run manual_approve F-2 con rol approver
+PASS manual approve with role
+boss si tiene rol 'approver': manual_approve se ejecuta y F-2 pasa a 'approved'
+PASS manual handler ran with user
+el handler grabo approved_by='boss', el usuario que firmo F-2
+PASS pending cleared after manual approve
+tras la firma de boss ya no queda nada pendiente en F-2
+> repetir manual_approve F-2 -> error claro
+motor responde: action manual_approve not pending (state approved)
+PASS repeated manual approve is a clear no-op error
+repetir manual_approve sobre F-2 (ya aprobada) devuelve el error claro not pending
+> receive sin campos obligatorios -> regla fields
+motor responde: missing field supplier
+PASS receive without fields refused by rule
+receive con supplier='' y amount=0: la regla fields exige esos campos y responde missing field
+> otra instancia y camino 'no' del rombo (definicion sin regla fields)
+PASS second instance independent
+otra copia del mismo proceso acepta F-4 (amount=10) sin interferir con la primera
+PASS incomplete invoice returned
+F-5 sin supplier (quitamos la regla fields a proposito) llega al rombo complete -> 'no' -> 'returned'
+PASS supplier notified by handler
+el handler de notify_supplier marco notified=.T. en F-5
+> errores de uso: sin id, duplicado, accion desconocida
+PASS missing id refused
+Run sin el campo 'id': el motor lo exige y su error nombra 'id'
+PASS duplicate instance refused
+repetir id='F-1' responde already exists: los ids son unicos por proceso
+PASS unknown action refused
+la accion 'fly' no existe en el proceso: el motor responde unknown action
+PASS unknown instance refused
+manual_approve sobre id='F-9', que no existe: el motor responde unknown instance
+PASS bad user refused
+pasamos el texto 'not a user' en lugar de un objeto usuario: el motor pide un objeto con cName
+PASS bad process refused
+pasamos el texto 'not a process' en lugar de un ProcessDefinition: el motor lo rechaza nombrandolo
+PASS invalid definition refused
+proceso con transicion 'go' al estado inexistente 'nowhere': Validate falla y el motor responde invalid process definition
+> rombo que devuelve etiqueta inexistente
+motor responde: decision d returned unknown branch maybe
+PASS decision with unknown branch refused
+el rombo devuelve 'maybe' pero solo tiene la rama 'yes': el motor responde unknown branch
+> dos rombos en ciclo -> freno anti-bucles
+motor responde: max steps exceeded (loop?)
+PASS decision loop stopped by guard
+dos rombos d1->d2->d1 en ciclo infinito: el freno anti-bucles corta con max steps
+> regla limit en receive (max 10000)
+motor responde: limit exceeded on amount
+PASS limit rule on receive
+regla limit (amount max 10000) probada con amount=20000: el motor responde limit exceeded
+PASS get unknown returns NIL
+Get('NOPE') sobre el proceso devuelve NIL en vez de romper
+PASS history unknown returns empty
+History('NOPE') devuelve un array vacio en vez de romper
+PASS F-2 history: receive + route + manual_approve
+el historial de F-2 tiene 3 pasos: receive, el enrutado del rombo y manual_approve
+bpm_engine: 30 checks OK, 0 fallos
+== suite invoice_simple: 13 checks OK ==
+--- test invoice_simple: los 3 caminos del diagrama ---
+proceso invoice_simple construido y validado: OK
+> Run receive FAC-A (Papelera Sur, 320)
+rombo complete -> yes, rombo check_amount -> yes
+accion auto_approve -> estado approved
+PASS A: auto-approved
+recibimos FAC-A (Papelera Sur, amount=320): completa y < 1000, la accion auto_approve la deja en 'approved' ella sola
+PASS A: approved by system
+el handler de auto_approve grabo approved_by='system' en los datos de FAC-A
+PASS A: receive logged with user
+el historial de FAC-A guarda como 1er paso la accion 'receive' ejecutada por el usuario 'recepcion'
+PASS A: auto_approve logged to approved
+2o paso del historial de FAC-A: accion 'auto_approve' con destino 'approved'
+> Run receive FAC-B (Papelera Sur, 2400)
+rombo complete -> yes, rombo check_amount -> no
+accion manual_approve es manual: el motor espera (pending)
+PASS B: waits in received
+FAC-B (amount=2400 >= 1000): el rombo check_amount dice 'no' y la instancia espera firma en 'received'
+PASS B: manual approval pending
+el motor devuelve pending='manual_approve': esa accion es manual y no se ejecuta sola
+> Run manual_approve FAC-B (supervisora)
+accion manual_approve -> estado approved
+PASS B: approved by human
+la usuaria 'supervisora' ejecuta manual_approve sobre FAC-B y la instancia pasa a 'approved'
+PASS B: approver recorded
+el handler de manual_approve grabo approved_by='supervisora', quien firmo
+> Run receive FAC-C (sin supplier, 75)
+rombo complete -> no, accion notify_supplier -> estado returned
+PASS C: incomplete returned
+FAC-C llega sin supplier: el rombo complete dice 'no' y notify_supplier la manda a 'returned'
+PASS C: supplier notified
+el handler de notify_supplier marco notified=.T. en los datos de FAC-C
+PASS C: notify logged to returned
+2o paso del historial de FAC-C: accion 'notify_supplier' con destino 'returned'
+> Run receive FAC-D (Papelera Sur, 1000)
+rombo check_amount con 1000 -> no (manual)
+PASS edge: 1000 goes to manual
+FAC-D con amount=1000 exactos: la condicion es amount < 1000, asi que 1000 va a aprobacion manual
+PASS instances isolated
+las instancias conviven en el mismo proceso sin mezclarse: FAC-A approved, FAC-B approved, FAC-C returned
+invoice_simple: 13 checks OK, 0 fallos
+TEST PASS - 60 checks OK en las 3 suites

@@ -1,4 +1,5 @@
 www/config.json
+claude.exe
 .logs/
 .sessions/
 tmp/
