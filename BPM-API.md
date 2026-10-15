@@ -1,11 +1,14 @@
 # BPM generico en HAL: API y ejemplo de uso
 
-Dos piezas en `controller/core`:
+Dos piezas en `www/controllers/core`:
 
 - **ProcessDefinition** define el proceso. Nivel 1: el dibujo (estados,
   transicion inicial, rombos, acciones). Nivel 2: las reglas (opcional).
 - **BpmEngine** lo ejecuta: crea instancias, evalua rombos, llama a los
   handlers, aplica reglas y registra historial.
+
+`www/loaders/00_bpm_core.prg` los monta al arranque del servidor para
+que sean accesibles globalmente (HIX carga todo lo de `www/loaders/`).
 
 Regla de fidelidad con el diagrama: los rombos apuntan a ACCIONES (o a
 otros rombos) y las acciones terminan siempre en un ESTADO.
@@ -76,9 +79,8 @@ Detalles que conviene saber:
 
 ## Ejemplo completo
 
-`processes/invoice_simple.prg` es el proceso de facturas del diagrama,
-nodo a nodo. Los tres caminos, con sus tests en
-`tests/test_invoice_simple.prg`:
+`www/controllers/invoice_simple.prg` es el proceso de facturas del
+diagrama, nodo a nodo:
 
 - completa y < 1000 -> `approved` por `system`
 - completa y >= 1000 -> espera firma de un usuario con rol `approver`
@@ -86,6 +88,11 @@ nodo a nodo. Los tres caminos, con sus tests en
 
 ## Tests
 
-Ver `tests/results.md`. Cada test es un `.prg` independiente con
-TRY/CATCH y ErrorSys, aislado en su propio hilo, y deja su detalle en
-`tests/results/`.
+Los tests viven en el modulo main (`www/controllers/test.prg`) y se
+lanzan desde la pantalla: boton **Test** en `/main`, o directamente
+`GET /test?name=invoice_simple|engine|definition|all`.
+
+Cada ejecucion devuelve JSON con las lineas de lo que va haciendo (la
+consola de la pantalla las pinta) y el resumen `ok/pass/fail`. El
+aislamiento por hilo lo da el propio HIX: cada peticion corre en su
+worker.

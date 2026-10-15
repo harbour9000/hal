@@ -46,6 +46,10 @@
 			<button id="hal-send" class="btn btn-success flex-grow-1">
 				<i class="bi bi-send me-1"></i>Enviar
 			</button>
+			<button id="hal-test" type="button" class="btn btn-outline-success"
+			        title="Lanzar el test del proceso invoice_simple">
+				<i class="bi bi-play-circle me-1"></i>Test
+			</button>
 			<button id="hal-mic" type="button"
 			        class="btn btn-outline-success d-none"
 			        title="Dictar por voz" aria-label="Dictar por voz">
@@ -117,6 +121,7 @@
 
 			const $input         = document.getElementById('hal-input');
 			const $send          = document.getElementById('hal-send');
+			const $test          = document.getElementById('hal-test');
 			const $console       = document.getElementById('hal-console');
 			const $help          = document.getElementById('hal-help');
 			const $helpModal     = document.getElementById('helpModal');
@@ -230,6 +235,30 @@
 			}
 
 			$send.addEventListener('click', send);
+
+			// Lanza el test del BPM y pinta lo que va haciendo en la consola
+			async function runTest() {
+				$console.innerHTML = '';
+				log('sys', 'Lanzando test invoice_simple...');
+				$test.disabled = true;
+				try {
+					const rsp  = await fetch('/test?name=invoice_simple');
+					const data = await rsp.json();
+					if (data.error) { log('err', data.error); return; }
+					for (const ln of (data.lines || [])) {
+						log(ln.kind || 'sys', ln.text || '');
+					}
+					log(data.ok ? 'ok' : 'err', data.ok
+						? 'TEST PASS (' + data.pass + ' checks)'
+						: 'TEST FAIL (' + data.fail + ' fallos)');
+				} catch (e) {
+					log('err', 'test request failed: ' + e.message);
+				} finally {
+					$test.disabled = false;
+				}
+			}
+
+			$test.addEventListener('click', runTest);
 			$input.addEventListener('keydown', function (e) {
 				if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); send(); }
 			});

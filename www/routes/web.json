@@ -1,4 +1,5 @@
 [
   { "name": "index", "url": "/",     "action": "views/index.html",     "method": "GET"  },
-  { "name": "main",  "url": "/main", "action": "controllers/main.prg", "method": "GET"  }
+  { "name": "main",  "url": "/main", "action": "controllers/main.prg", "method": "GET"  },
+  { "name": "test",  "url": "/test", "action": "controllers/test.prg", "method": "GET"  }
 ]

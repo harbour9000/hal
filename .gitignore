@@ -2,3 +2,4 @@ www/config.json
 .logs/
 .sessions/
 tmp/
+www/loaders/*.hrb
