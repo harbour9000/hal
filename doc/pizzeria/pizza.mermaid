@@ -1,0 +1,24 @@
+flowchart TD
+    Inicio((Inicio)) -->|order<br/>regla: fields=cliente| nuevo([nuevo])
+
+    nuevo -.->|SetDecision: nuevo → con_pina| con_pina{con_pina}
+
+    con_pina -->|si| rechazar[rechazar]
+    con_pina -->|no| por_vip{por_vip}
+
+    por_vip -->|si| cocinar_rapido[cocinar_rapido]
+    por_vip -->|no| cocinar_normal[cocinar_normal]
+
+    rechazar --> rechazado([rechazado])
+    cocinar_rapido --> listo([listo])
+    cocinar_normal --> listo([listo])
+
+    classDef estado fill:#d1ecf1,stroke:#0c5460,color:#0c5460;
+    classDef decision fill:#fff3cd,stroke:#856404,color:#856404;
+    classDef accion fill:#d4edda,stroke:#155724,color:#155724;
+    classDef inicio fill:#e2e3e5,stroke:#383d41,color:#383d41;
+
+    class nuevo,listo,rechazado estado;
+    class con_pina,por_vip decision;
+    class rechazar,cocinar_rapido,cocinar_normal accion;
+    class Inicio inicio;
