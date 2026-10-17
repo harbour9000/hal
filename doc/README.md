@@ -54,6 +54,16 @@ Para cuando ya conoces el BPM y solo necesitas recordar la API.
 
 ---
 
+## Hoja de ruta
+
+7. **[pendientes.md](pendientes.md)** — Qué le falta a cada clase
+   a nivel funcional (topología BPMN, persistencia, concurrencia,
+   observabilidad, introspección para MCP…), con el **orden
+   crítico** sugerido para abordarlo y una lista de lo que
+   conviene **no tocar**.
+
+---
+
 ## Otros
 
 - **`log.txt`** — Volcado de ejemplo de una ejecución de los tests
